@@ -215,6 +215,8 @@ public final class Utilities {
   public static final String HIVE_ADDED_JARS = "hive.added.jars";
   public static String MAPNAME = "Map ";
   public static String REDUCENAME = "Reducer ";
+  private static int CURRENT_DIR_THRESHOLD = 5;
+  private static ArrayList<String> S3_PREFIX = new ArrayList<>(Arrays.asList("s3", "s3n", "s3a"));
 
   /**
    * ReduceField:
@@ -3392,9 +3394,61 @@ public final class Utilities {
 
     Set<Path> pathsProcessed = new HashSet<Path>();
     List<Path> pathsToAdd = new LinkedList<Path>();
+    ArrayList<String> inputPaths = work.getPaths();
     // AliasToWork contains all the aliases
     for (String alias : work.getAliasToWork().keySet()) {
       LOG.info("Processing alias " + alias);
+
+      Map<String, Integer> wildCardPathMap = new HashMap<>();  // ancestor to no. of files in that directory
+      Set<Path> probablePaths = new HashSet<Path>();
+
+      // Find no. of files in the parent directory or at grandPa directory of each input path
+      // This will help in case of S3 like filesystems
+      // for A/B/C put A/B/* to map
+      if (inputPaths != null) {
+        for (String input : inputPaths) {
+          Path p = new Path(input);
+          Path parent = p.getParent();
+          String name = p.getName();
+          String key = parent.toString() + "/*";
+
+          if (!wildCardPathMap.containsKey(key)) {
+            wildCardPathMap.put(key, 1);
+          } else {
+            int prev = wildCardPathMap.get(key);
+            wildCardPathMap.put(key, prev + 1);
+            if ((prev + 1) > CURRENT_DIR_THRESHOLD) {
+              continue;
+            }
+          }
+
+          // add grandpas: for A/B/C put A/*/C to map
+          String grandPa = parent.getParent().toString() + "/*/" + name;
+          if (!wildCardPathMap.containsKey(grandPa)) {
+            wildCardPathMap.put(grandPa, 1);
+          } else {
+            int prev = wildCardPathMap.get(grandPa);
+            wildCardPathMap.put(grandPa, prev + 1);
+          }
+        }
+      }
+
+      // now list all wildcard paths which are frequent in input paths
+      for (String p : wildCardPathMap.keySet()) {
+        Path ancestor = new Path(p);
+        if (isS3FileSystem(ancestor, job)
+                && wildCardPathMap.get(ancestor.toString()) > CURRENT_DIR_THRESHOLD) {
+          LOG.info("payas : " + ancestor + " is s3 in file system and we are listing it...");
+          // hack for s3 file system
+          FileStatus[] filesInDir = ancestor.getFileSystem(job).globStatus(ancestor);
+          for (FileStatus f : filesInDir) {
+            probablePaths.add(f.getPath());
+          }
+        }
+      }
+
+      LOG.info("payas total " + wildCardPathMap.size() + " entries in map");
+      LOG.info("payas total " + probablePaths.size() + " entries in cache");
 
       // The alias may not have any path
       Path path = null;
@@ -3410,6 +3464,23 @@ public final class Utilities {
           }
 
           pathsProcessed.add(path);
+
+          if (isS3FileSystem(path, job)) {
+            // To avoid call to isEmptyPath(), which is costly in S3 like file system
+            if (probablePaths.contains(path)) {
+              LOG.info("payas cached path: " + path);
+              pathsToAdd.add(path);
+              continue;
+            } else if (!skipDummy && ancestorWasListed(path, wildCardPathMap)) {
+              // path is not in probablePaths and its ancestor was listed - means this partition 'path' doesn't exist.
+              // we can avoid the costly call to isEmpty() here as well
+              LOG.info("payas created dummy file for : "  + path);
+              path = createDummyFileForEmptyPartition(path, job, work,
+                   hiveScratchDir, alias, sequenceNumber++);
+              pathsToAdd.add(path);
+              continue;
+            }
+          }
 
           LOG.info("Adding input file " + path);
           if (!skipDummy
@@ -3437,6 +3508,36 @@ public final class Utilities {
       }
     }
     return pathsToAdd;
+  }
+
+  // Checks if we did listing at parent or grandparent directory level of path or not. 
+  private static boolean ancestorWasListed(Path path, Map<String, Integer> map) {
+    if (map != null) {
+      String name = path.getName();
+      String parent = path.getParent().toString() + "/*";
+      String grandPa = path.getParent().getParent().toString() + "/*/" + name;
+
+      if (map.containsKey(parent)) {
+        return map.get(parent) > CURRENT_DIR_THRESHOLD;
+      } else if (map.containsKey(grandPa)) {
+        return map.get(grandPa) > CURRENT_DIR_THRESHOLD;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  // whether the file system for the path p is a S3 file system or not (i.e, if path starts with "s3" or "s3n" or "s3a" or not)
+  private static boolean isS3FileSystem(Path p, JobConf job) {
+    try {
+      String fsScheme = p.getFileSystem(job).getScheme();
+      return S3_PREFIX.contains(fsScheme);
+    } catch (Exception ex) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Exception while trying to get FileSystem for " + p.getName(), ex);
+      }
+      return false;
+    }
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
