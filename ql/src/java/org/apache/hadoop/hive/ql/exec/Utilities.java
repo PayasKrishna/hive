@@ -3417,6 +3417,9 @@ public final class Utilities {
           for (String input : inputPaths) {
             Path p = new Path(input);
             Path parent = p.getParent();
+
+            if (parent == null) continue;
+
             String name = p.getName();
             String key = parent.toString() + "/*";
 
@@ -3447,6 +3450,7 @@ public final class Utilities {
         for (String p : wildCardPathMap.keySet()) {
           Path ancestor = new Path(p);
           if (isS3FileSystem(ancestor, job) 
+                  && wildCardPathMap.containsKey(ancestor.toString()) 
                   && wildCardPathMap.get(ancestor.toString()) > dirThreshold) {
             LOG.info("payas : " + ancestor + " is s3 in file system and we are listing it...");
             // hack for s3 file system
