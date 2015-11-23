@@ -24,11 +24,13 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.logging.Log;
@@ -66,6 +68,7 @@ import org.apache.log4j.LogManager;
 public class HadoopJobExecHelper {
 
   static final private Log LOG = LogFactory.getLog(HadoopJobExecHelper.class.getName());
+  static final private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
 
   protected transient JobConf job;
   protected Task<? extends Serializable> task;
@@ -145,6 +148,7 @@ public class HadoopJobExecHelper {
     this.console = console;
     this.task = task;
     this.callBackObj = hookCallBack;
+    sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
 
     if (job != null) {
       // even with tez on some jobs are run as MR. disable the flag in
@@ -441,6 +445,8 @@ public class HadoopJobExecHelper {
       }
       console.printInfo(getJobStartMsg(rj.getID()) + ", Tracking URL = "
           + rj.getTrackingURL());
+      Date currentTime = new Date();
+      console.printInfo("Job start time: " + sdf.format(currentTime));
       console.printInfo("Kill Command = " + HiveConf.getVar(job, HiveConf.ConfVars.HADOOPBIN)
           + " job  -kill " + rj.getID());
     }

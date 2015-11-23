@@ -23,7 +23,9 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -32,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.TimeZone;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
@@ -126,6 +129,7 @@ public class Driver implements CommandProcessor {
   static final private LogHelper console = new LogHelper(LOG);
 
   private static final Object compileMonitor = new Object();
+  private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
 
   private int maxRows = 100;
   ByteStream.Output bos = new ByteStream.Output();
@@ -1634,7 +1638,11 @@ public class Driver implements CommandProcessor {
       conf.set("mapreduce.workflow.node.name", tsk.getId());
       Utilities.setWorkflowAdjacencies(conf, plan);
       cxt.incCurJobNo(1);
+      Date currentTime = new Date();
+      sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
       console.printInfo("Launching Job " + cxt.getCurJobNo() + " out of " + jobs);
+      // to track stage wise planning time
+      console.printInfo(tsk.getId() + " launched at: " + sdf.format(currentTime));
     }
     tsk.initialize(conf, plan, cxt);
     TaskResult tskRes = new TaskResult();
