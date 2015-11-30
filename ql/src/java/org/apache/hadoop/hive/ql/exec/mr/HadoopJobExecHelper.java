@@ -446,7 +446,7 @@ public class HadoopJobExecHelper {
       console.printInfo(getJobStartMsg(rj.getID()) + ", Tracking URL = "
           + rj.getTrackingURL());
       Date currentTime = new Date();
-      console.printInfo("Job start time: " + sdf.format(currentTime));
+      console.printInfo("Job " + task.getId() + " starting at " + sdf.format(currentTime));
       console.printInfo("Kill Command = " + HiveConf.getVar(job, HiveConf.ConfVars.HADOOPBIN)
           + " job  -kill " + rj.getID());
     }
