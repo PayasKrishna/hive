@@ -765,6 +765,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     private String startTableFunction(String function, String db, String tbl) {
+      // payas - code edits to check if we should write to metadata cache.
+      // By default we do write, but if we find any db not equal to default,
+      // we won't populate the cache, as user tbls can change very fast.
+      String POPULATE_CACHE_STR = "populate_cache";
+      boolean populateCache = getConf().getBoolean(POPULATE_CACHE_STR, true);
+
+      if (populateCache && !db.equals("default")) {
+        // set this to false if any non-default table is referenced
+        getConf().setBoolean(POPULATE_CACHE_STR, false);
+      }
+
       return startFunction(function, " : db=" + db + " tbl=" + tbl);
     }
 

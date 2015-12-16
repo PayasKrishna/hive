@@ -89,6 +89,15 @@ public class MoveTask extends Task<MoveWork> implements Serializable {
       throws Exception {
     FileSystem fs = sourcePath.getFileSystem(conf);
     if (isDfsDir) {
+
+      // payas - this is executed incase of write to dfs, the ls of which we
+      // don't want to cache as this dir contents can change too frequently.
+      String POPULATE_CACHE_STR = "populate_cache";
+      boolean populateCache     = conf.getBoolean(POPULATE_CACHE_STR, true);
+      if (populateCache) {
+        conf.setBoolean(POPULATE_CACHE_STR, false);
+      }
+
       // Just do a rename on the URIs, they belong to the same FS
       String mesg = "Moving data to: " + targetPath.toString();
       String mesg_detail = " from " + sourcePath.toString();
