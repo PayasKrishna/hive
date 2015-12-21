@@ -3531,6 +3531,8 @@ public final class Utilities {
       String parent = path.getParent().toString() + "/*";
 
       if (path.getParent() == null) return false;
+      if (path.getParent().getParent() == null) return false;
+
       String grandPa = path.getParent().getParent().toString() + "/*/" + name;
 
       if (map.containsKey(parent)) {
