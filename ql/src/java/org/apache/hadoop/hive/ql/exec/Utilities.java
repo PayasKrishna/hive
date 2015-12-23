@@ -3408,8 +3408,13 @@ public final class Utilities {
 
       String optimizeS3 = job.get(HIVE_S3_OPTIMIZE, DEFAULT_HIVE_S3_OPTIMIZE).toLowerCase().trim();
       int dirThreshold = job.getInt(DIRECTORY_THRESHOLD, DEFAULT_CURRENT_DIR_THRESHOLD);
+      String metaCacheWrites = "populate_cache";
 
       if (optimizeS3.equals("true")) {
+        // we should not popuate cache right now, as here parent levels get cached too,
+        // which are prone to changes
+        boolean prevVal = ctx.getConf().getBoolean(metaCacheWrites, false);
+        ctx.getConf().setBoolean(metaCacheWrites, false);
         if (inputPaths != null) {
           // Find no. of files in the parent directory or at grandPa directory of each input path
           // This will help in case of S3 like filesystems
@@ -3462,6 +3467,7 @@ public final class Utilities {
         }
         LOG.info("payas total " + wildCardPathMap.size() + " entries in map");
         LOG.info("payas total " + probablePaths.size() + " entries in cache");
+        ctx.getConf().setBoolean(metaCacheWrites, prevVal);   // restore the flag value
       }
 
       // The alias may not have any path
